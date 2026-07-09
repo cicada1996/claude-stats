@@ -1,0 +1,788 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude Stats</title>
+<style>
+  .viz-root {
+    --page:      #f9f9f7;
+    --surface:   #fcfcfb;
+    --ink:       #0b0b0b;
+    --ink-2:     #52514e;
+    --muted:     #898781;
+    --grid:      #e1e0d9;
+    --baseline:  #c3c2b7;
+    --border:    rgba(11,11,11,0.10);
+    --s1: #2a78d6;  /* blue    — Fable 5   */
+    --s2: #1baf7a;  /* aqua    — Opus 4.8  */
+    --s3: #eda100;  /* yellow  — Opus 4.7  */
+    --s4: #008300;  /* green   — Sonnet 4.6*/
+    --s5: #4a3aa7;  /* violet  — other     */
+    --s6: #e34948;  /* red     — other     */
+    --meter-track: #cde2fb;
+    --good: #0ca30c; --warn: #fab219; --crit: #d03b3b;
+    --seq-100:#cde2fb; --seq-200:#9ec5f4; --seq-300:#6da7ec; --seq-400:#3987e5;
+    --seq-500:#256abf; --seq-600:#184f95; --seq-700:#0d366b;
+  }
+  @media (prefers-color-scheme: dark) {
+    .viz-root {
+      --page:      #0d0d0d;
+      --surface:   #1a1a19;
+      --ink:       #ffffff;
+      --ink-2:     #c3c2b7;
+      --muted:     #898781;
+      --grid:      #2c2c2a;
+      --baseline:  #383835;
+      --border:    rgba(255,255,255,0.10);
+      --s1: #3987e5; --s2: #199e70; --s3: #c98500; --s4: #008300;
+      --s5: #9085e9; --s6: #e66767;
+      --meter-track: #104281;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body.viz-root {
+    background: var(--page); color: var(--ink);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 20px 20px 60px; }
+  header.top { display: flex; align-items: baseline; gap: 12px; margin: 8px 0 18px; }
+  header.top h1 { font-size: 19px; font-weight: 650; margin: 0; }
+  header.top .sub { color: var(--muted); font-size: 12.5px; }
+  header.top .live { margin-left: auto; color: var(--muted); font-size: 12px; }
+  header.top .live .dot { display:inline-block; width:7px; height:7px; border-radius:50%;
+    background: var(--good); margin-right: 5px; vertical-align: 1px; }
+
+  .grid { display: grid; gap: 14px; grid-template-columns: repeat(12, 1fr); }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px 18px; min-width: 0;
+  }
+  .card h2 { font-size: 13px; font-weight: 600; color: var(--ink-2); margin: 0 0 2px; }
+  .card .h-sub { font-size: 11.5px; color: var(--muted); margin: 0 0 10px; }
+  .span3  { grid-column: span 3; } .span4 { grid-column: span 4; }
+  .span5  { grid-column: span 5; } .span6 { grid-column: span 6; }
+  .span7  { grid-column: span 7; } .span8 { grid-column: span 8; }
+  .span12 { grid-column: span 12; }
+  @media (max-width: 980px) {
+    .span3, .span4 { grid-column: span 6; }
+    .span5, .span6, .span7, .span8 { grid-column: span 12; }
+  }
+  @media (max-width: 560px) { .span3, .span4 { grid-column: span 12; } }
+
+  /* stat tiles */
+  .tile .label { font-size: 12px; color: var(--ink-2); }
+  .tile .value { font-size: 27px; font-weight: 650; margin-top: 2px; }
+  .tile .value.hero { font-size: 44px; letter-spacing: -0.5px; }
+  .tile .delta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .tile .delta .up { color: var(--good); }
+
+  /* meter */
+  .meter { height: 14px; border-radius: 7px; background: var(--meter-track);
+    overflow: hidden; margin: 10px 0 8px; }
+  .meter > div { height: 100%; border-radius: 7px; background: var(--s1);
+    transition: width .6s ease; }
+  .meter-row { display: flex; justify-content: space-between; font-size: 12px;
+    color: var(--ink-2); }
+  .blockbig { font-size: 27px; font-weight: 650; }
+
+  /* filter row */
+  .filters { display: flex; gap: 8px; align-items: center; margin: 26px 0 12px; }
+  .filters .fl { font-size: 12.5px; color: var(--muted); margin-right: 4px; }
+  .filters button {
+    font: 12.5px system-ui, sans-serif; padding: 5px 12px; border-radius: 15px;
+    border: 1px solid var(--border); background: var(--surface); color: var(--ink-2);
+    cursor: pointer;
+  }
+  .filters button:hover { border-color: var(--baseline); }
+  .filters button.on { background: var(--ink); color: var(--page);
+    border-color: var(--ink); font-weight: 600; }
+
+  svg { display: block; }
+  .chart-scroll { overflow-x: auto; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 10px;
+    font-size: 12px; color: var(--ink-2); }
+  .legend .key { display: inline-block; width: 10px; height: 10px;
+    border-radius: 2.5px; margin-right: 6px; vertical-align: -1px; }
+
+  /* tooltip */
+  #tip { position: fixed; pointer-events: none; z-index: 50; display: none;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 11px; font-size: 12px; box-shadow: 0 4px 18px rgba(0,0,0,.18);
+    max-width: 260px; }
+  #tip .t-title { color: var(--muted); margin-bottom: 4px; }
+  #tip .t-row { display: flex; align-items: center; gap: 7px; margin-top: 2px; }
+  #tip .t-key { width: 10px; height: 3px; border-radius: 2px; flex: none; }
+  #tip .t-val { font-weight: 650; font-variant-numeric: tabular-nums; }
+  #tip .t-name { color: var(--ink-2); }
+
+  /* tables */
+  table.stats { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.stats th { text-align: left; color: var(--muted); font-weight: 500;
+    padding: 5px 8px 5px 0; border-bottom: 1px solid var(--grid); }
+  table.stats th.num, table.stats td.num { text-align: right;
+    font-variant-numeric: tabular-nums; }
+  table.stats td { padding: 6px 8px 6px 0; border-bottom: 1px solid var(--grid); }
+  table.stats tr:last-child td { border-bottom: none; }
+  .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2.5px;
+    margin-right: 7px; vertical-align: -1px; }
+  .bar-cell { position: relative; }
+  .bar-bg { position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+    height: 15px; border-radius: 0 3px 3px 0; opacity: .95; }
+
+  details.tbl { margin-top: 12px; }
+  details.tbl summary { font-size: 12px; color: var(--muted); cursor: pointer; }
+  .foot { margin-top: 28px; color: var(--muted); font-size: 12px; }
+  .foot code { font-family: ui-monospace, monospace; font-size: 11.5px; }
+</style>
+</head>
+<body class="viz-root">
+<div class="wrap">
+  <header class="top">
+    <h1>Claude Stats</h1>
+    <span class="sub" id="since"></span>
+    <span class="live"><span class="dot"></span><span id="updated">loading…</span></span>
+  </header>
+
+  <!-- LIVE section -->
+  <div class="grid" id="live-tiles"></div>
+
+  <div class="grid" style="margin-top:14px">
+    <div class="card span7">
+      <h2>Current 5-hour window</h2>
+      <p class="h-sub" id="block-sub"></p>
+      <div id="block-body"></div>
+    </div>
+    <div class="card span5">
+      <h2>Recent 5-hour windows</h2>
+      <p class="h-sub">Total tokens per window · dashed line = your biggest window so far</p>
+      <div id="blocks-chart"></div>
+    </div>
+  </div>
+
+  <!-- FILTERS -->
+  <div class="filters" id="filters">
+    <span class="fl">History</span>
+    <button data-days="7">Last 7 days</button>
+    <button data-days="30" class="on">Last 30 days</button>
+    <button data-days="90">Last 90 days</button>
+    <button data-days="">All time</button>
+  </div>
+
+  <div class="grid">
+    <div class="card span12">
+      <h2>Tokens per day</h2>
+      <p class="h-sub">Stacked by model · includes cache reads/writes (the full context you pushed through Claude)</p>
+      <div class="chart-scroll"><div id="daily-chart"></div></div>
+      <div class="legend" id="daily-legend"></div>
+      <details class="tbl"><summary>Table view</summary><div id="daily-table"></div></details>
+    </div>
+
+    <div class="card span6">
+      <h2>API-equivalent cost per day</h2>
+      <p class="h-sub">What each day would cost at pay-per-token API prices</p>
+      <div class="chart-scroll"><div id="cost-chart"></div></div>
+    </div>
+
+    <div class="card span6">
+      <h2>When you work</h2>
+      <p class="h-sub">Tokens by weekday and hour</p>
+      <div class="chart-scroll"><div id="heatmap"></div></div>
+    </div>
+
+    <div class="card span7">
+      <h2>By model</h2>
+      <p class="h-sub" id="models-sub"></p>
+      <div id="models-table"></div>
+    </div>
+
+    <div class="card span5">
+      <h2>By project</h2>
+      <p class="h-sub">Total tokens per project directory</p>
+      <div id="projects-table"></div>
+    </div>
+
+    <div class="card span5">
+      <h2>Cache economics</h2>
+      <p class="h-sub">Prompt caching is why the token totals are huge but affordable</p>
+      <div id="cache-body"></div>
+    </div>
+
+    <div class="card span4">
+      <h2>Tool calls</h2>
+      <p class="h-sub">Most-used tools in the selected range</p>
+      <div id="tools-table"></div>
+    </div>
+
+    <div class="card span3">
+      <h2>Range totals</h2>
+      <p class="h-sub" id="totals-sub"></p>
+      <div id="totals-body"></div>
+    </div>
+  </div>
+
+  <p class="foot">Reads <code>~/.claude/projects/**/*.jsonl</code> locally — nothing leaves your machine.
+    Auto-refreshes every 30&nbsp;s. Cost figures are API-equivalent estimates; your Max plan is a flat fee.
+    The 5-hour-window “max” is your own historical peak — check <code>/usage</code> in Claude Code for official plan limits.</p>
+</div>
+
+<div id="tip"></div>
+
+<script>
+"use strict";
+const $ = (s) => document.querySelector(s);
+const css = (v) => getComputedStyle(document.body).getPropertyValue(v).trim();
+
+/* fixed categorical assignment: color follows the model, never its rank */
+const MODEL_SLOTS = { "Fable 5": "--s1", "Opus 4.8": "--s2", "Opus 4.7": "--s3",
+                      "Sonnet 4.6": "--s4", "Sonnet 4.5": "--s5", "Sonnet 5": "--s5",
+                      "Haiku 4.5": "--s6" };
+const MODEL_ORDER = ["Fable 5", "Opus 4.8", "Opus 4.7", "Sonnet 4.6", "Sonnet 5",
+                     "Sonnet 4.5", "Haiku 4.5"];
+let extraSlot = 5;
+const extraAssigned = {};
+function modelColor(name) {
+  if (MODEL_SLOTS[name]) return css(MODEL_SLOTS[name]);
+  if (!extraAssigned[name]) { extraSlot = Math.min(extraSlot + 1, 6); extraAssigned[name] = "--s" + extraSlot; }
+  return css(extraAssigned[name]);
+}
+function modelSort(names) {
+  return names.slice().sort((a, b) => {
+    const ia = MODEL_ORDER.indexOf(a), ib = MODEL_ORDER.indexOf(b);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
+}
+
+const fmt = (n) => {
+  if (n >= 1e9) return (n / 1e9).toFixed(n >= 1e10 ? 0 : 1) + "B";
+  if (n >= 1e6) return (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + "M";
+  if (n >= 1e3) return (n / 1e3).toFixed(n >= 1e4 ? 0 : 1) + "K";
+  return String(Math.round(n));
+};
+const fmtFull = (n) => Math.round(n).toLocaleString("en-US");
+const money = (n) => "$" + (n >= 100 ? Math.round(n).toLocaleString("en-US")
+                    : n.toFixed(2));
+const esc = document.createElement("div");
+const wd = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+
+/* ---------------- tooltip ---------------- */
+const tip = $("#tip");
+function showTip(evt, title, rows) {
+  tip.textContent = "";
+  const t = document.createElement("div");
+  t.className = "t-title"; t.textContent = title; tip.appendChild(t);
+  for (const r of rows) {
+    const row = document.createElement("div"); row.className = "t-row";
+    if (r.color) { const k = document.createElement("span"); k.className = "t-key";
+      k.style.background = r.color; row.appendChild(k); }
+    const v = document.createElement("span"); v.className = "t-val";
+    v.textContent = r.value; row.appendChild(v);
+    if (r.name) { const nm = document.createElement("span"); nm.className = "t-name";
+      nm.textContent = r.name; row.appendChild(nm); }
+    tip.appendChild(row);
+  }
+  tip.style.display = "block";
+  moveTip(evt);
+}
+function moveTip(evt) {
+  const pad = 14, w = tip.offsetWidth, h = tip.offsetHeight;
+  let x = evt.clientX + pad, y = evt.clientY + pad;
+  if (x + w > innerWidth - 8) x = evt.clientX - w - pad;
+  if (y + h > innerHeight - 8) y = evt.clientY - h - pad;
+  tip.style.left = x + "px"; tip.style.top = y + "px";
+}
+function hideTip() { tip.style.display = "none"; }
+
+/* ---------------- svg helpers ---------------- */
+const NS = "http://www.w3.org/2000/svg";
+function el(name, attrs, parent) {
+  const e = document.createElementNS(NS, name);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+/* column with 4px rounded top, square baseline */
+function roundedTopPath(x, y, w, h, r) {
+  r = Math.min(r, h, w / 2);
+  return `M${x},${y + h} L${x},${y + r} Q${x},${y} ${x + r},${y} L${x + w - r},${y}` +
+         ` Q${x + w},${y} ${x + w},${y + r} L${x + w},${y + h} Z`;
+}
+function niceTicks(max) {
+  if (max <= 0) return [0, 1];
+  const raw = max / 3;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => max / s <= 4) || 10 * mag;
+  const ticks = [];
+  for (let v = 0; v <= max * 1.0001; v += step) ticks.push(v);
+  return ticks;
+}
+
+/* ============================================================ renderers */
+
+function tile(label, value, delta, hero) {
+  const d = document.createElement("div");
+  d.className = "card span3 tile";
+  d.innerHTML = `<div class="label"></div><div class="value${hero ? " hero" : ""}"></div>` +
+                `<div class="delta"></div>`;
+  d.querySelector(".label").textContent = label;
+  d.querySelector(".value").textContent = value;
+  d.querySelector(".delta").textContent = delta || "";
+  return d;
+}
+
+function renderLive(data) {
+  const host = $("#live-tiles");
+  host.textContent = "";
+  const t = data.today;
+  const hero = tile("Tokens today", fmt(t.total),
+    `${fmt(t.out)} generated · ${fmt(t.cr + t.cw)} from cache`, true);
+  hero.classList.remove("span3"); hero.classList.add("span3");
+  host.appendChild(hero);
+  host.appendChild(tile("API-equivalent cost today", money(t.cost),
+    `${t.msgs} responses · ${t.sessions} session${t.sessions === 1 ? "" : "s"}`));
+  const tot = data.totals;
+  host.appendChild(tile("All history", fmt(data.all_total || 0),
+    data.all_cost != null ? `≈ ${money(data.all_cost)} at API prices` : ""));
+  const hitBase = t.cr + t.cw + t.in;
+  const hit = hitBase ? Math.round(100 * t.cr / hitBase) : 0;
+  host.appendChild(tile("Cache hit rate today", hit + "%",
+    "share of context served from cache"));
+}
+
+function renderBlock(data) {
+  const sub = $("#block-sub"), body = $("#block-body");
+  body.textContent = "";
+  const b = data.current_block;
+  if (!b) {
+    sub.textContent = "No active window — the next one starts with your next message.";
+    const last = data.blocks[data.blocks.length - 1];
+    if (last) {
+      const p = document.createElement("p");
+      p.style.cssText = "color:var(--ink-2);font-size:13px";
+      p.textContent = `Last window ended ${new Date(last.end * 1000)
+        .toLocaleString([], {weekday:"short", hour:"2-digit", minute:"2-digit"})} — ` +
+        `${fmt(last.tokens)} tokens, ${money(last.cost)}.`;
+      body.appendChild(p);
+    }
+    return;
+  }
+  const start = new Date(b.start * 1000), end = new Date(b.end * 1000);
+  const hm = (d) => d.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"});
+  sub.textContent = `${hm(start)} – ${hm(end)} · resets in ` +
+    `${Math.floor(b.minutes_left / 60)} h ${b.minutes_left % 60} min`;
+
+  const big = document.createElement("div");
+  big.className = "blockbig";
+  big.textContent = fmt(b.tokens) + " tokens";
+  body.appendChild(big);
+
+  const pct = Math.min(100, b.pct_of_max);
+  const meter = document.createElement("div"); meter.className = "meter";
+  const fill = document.createElement("div");
+  fill.style.width = pct + "%";
+  fill.style.background = pct >= 90 ? css("--crit") : pct >= 70 ? css("--warn") : css("--s1");
+  meter.appendChild(fill); body.appendChild(meter);
+
+  const row = document.createElement("div"); row.className = "meter-row";
+  const l = document.createElement("span");
+  l.textContent = `${pct}% of your biggest window (${fmt(data.max_block)})`;
+  const r = document.createElement("span");
+  r.textContent = `${fmt(b.burn_per_min)} tokens/min · ${money(b.cost)} so far`;
+  row.appendChild(l); row.appendChild(r); body.appendChild(row);
+
+  const note = document.createElement("p");
+  note.style.cssText = "color:var(--muted);font-size:11.5px;margin:10px 0 0";
+  note.textContent = "Benchmark is your own historical peak, not the official plan limit — run /usage in Claude Code for that.";
+  body.appendChild(note);
+}
+
+function renderBlocksChart(data) {
+  const host = $("#blocks-chart"); host.textContent = "";
+  const blocks = data.blocks;
+  if (!blocks.length) return;
+  const W = host.clientWidth || 420, H = 150, padB = 20, padT = 12;
+  const svg = el("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}` }, host);
+  const max = Math.max(data.max_block, 1);
+  const bw = Math.min(24, (W - 10) / blocks.length - 2);
+  const step = (W - 10) / blocks.length;
+  const y = (v) => padT + (H - padB - padT) * (1 - v / max);
+  /* personal-max reference line */
+  el("line", { x1: 0, x2: W, y1: y(max), y2: y(max), stroke: css("--baseline"),
+    "stroke-width": 1, "stroke-dasharray": "4 3" }, svg);
+  blocks.forEach((b, i) => {
+    const x = 5 + i * step + (step - bw) / 2;
+    const h = Math.max(1.5, (H - padB - padT) * (b.tokens / max));
+    const p = el("path", { d: roundedTopPath(x, H - padB - h, bw, h, 4),
+      fill: b.active ? css("--s1") : css("--seq-200") }, svg);
+    const hit = el("rect", { x: 5 + i * step, y: 0, width: step, height: H - padB,
+      fill: "transparent" }, svg);
+    const when = new Date(b.start * 1000).toLocaleString([],
+      { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+    const rows = [{ value: fmt(b.tokens) + " tokens", name: b.active ? "in progress" : "" },
+                  { value: money(b.cost), name: "API-equivalent" }];
+    for (const ev of ["pointermove", "pointerenter"])
+      hit.addEventListener(ev, (e) => { showTip(e, when, rows);
+        p.setAttribute("opacity", "0.8"); });
+    hit.addEventListener("pointerleave", () => { hideTip();
+      p.setAttribute("opacity", "1"); });
+  });
+  el("line", { x1: 0, x2: W, y1: H - padB, y2: H - padB,
+    stroke: css("--baseline"), "stroke-width": 1 }, svg);
+  const t1 = el("text", { x: 2, y: H - 5, fill: css("--muted"),
+    "font-size": 10.5 }, svg);
+  t1.textContent = new Date(blocks[0].start * 1000)
+    .toLocaleDateString([], { month: "short", day: "numeric" });
+  const t2 = el("text", { x: W - 2, y: H - 5, fill: css("--muted"),
+    "font-size": 10.5, "text-anchor": "end" }, svg);
+  t2.textContent = "now";
+}
+
+function renderDaily(data) {
+  const host = $("#daily-chart"); host.textContent = "";
+  const days = data.daily;
+  const legend = $("#daily-legend"); legend.textContent = "";
+  if (!days.length) { host.textContent = "No data in range."; return; }
+
+  const names = modelSort([...new Set(days.flatMap(d => Object.keys(d.models)))]
+    .filter(n => n !== "<synthetic>"));
+  const wAvail = $("#daily-chart").parentElement.clientWidth || 1100;
+  const step = Math.max(14, Math.min(46, (wAvail - 50) / days.length));
+  const W = Math.max(wAvail, 50 + step * days.length), H = 230, padB = 26, padT = 14, padL = 44;
+  const svg = el("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}` }, host);
+  const max = Math.max(...days.map(d => d.total), 1);
+  const ticks = niceTicks(max);
+  const yMax = ticks[ticks.length - 1];
+  const y = (v) => padT + (H - padB - padT) * (1 - v / yMax);
+  for (const tv of ticks) {
+    el("line", { x1: padL, x2: W, y1: y(tv), y2: y(tv), stroke: css("--grid"),
+      "stroke-width": 1 }, svg);
+    const t = el("text", { x: padL - 6, y: y(tv) + 3.5, fill: css("--muted"),
+      "font-size": 10.5, "text-anchor": "end" }, svg);
+    t.textContent = fmt(tv);
+  }
+  const bw = Math.min(24, step - 3);
+  const surface = css("--surface");
+  const maxDay = days.reduce((a, b) => (b.total > a.total ? b : a), days[0]);
+
+  days.forEach((d, i) => {
+    const x = padL + i * step + (step - bw) / 2;
+    let acc = 0;
+    const stack = names.filter(n => d.models[n]);
+    stack.forEach((n, si) => {
+      const v = d.models[n];
+      const y0 = y(acc), y1 = y(acc + v);
+      const isTop = si === stack.length - 1;
+      const h = Math.max(0, y0 - y1 - (isTop ? 0 : 2)); /* 2px surface gap */
+      if (h <= 0) { acc += v; return; }
+      if (isTop) el("path", { d: roundedTopPath(x, y1, bw, y0 - y1, 4),
+        fill: modelColor(n) }, svg);
+      else el("rect", { x, y: y1 + 2, width: bw, height: h, fill: modelColor(n) }, svg);
+      acc += v;
+    });
+    /* selective direct label: biggest day only */
+    if (d === maxDay) {
+      const t = el("text", { x: x + bw / 2, y: y(d.total) - 5, fill: css("--ink-2"),
+        "font-size": 10.5, "text-anchor": "middle", "font-weight": 600 }, svg);
+      t.textContent = fmt(d.total);
+    }
+    /* x labels: sparse */
+    const every = Math.ceil(days.length / Math.floor(W / 78));
+    if (i % every === 0) {
+      const t = el("text", { x: x + bw / 2, y: H - 8, fill: css("--muted"),
+        "font-size": 10.5, "text-anchor": "middle" }, svg);
+      t.textContent = new Date(d.date + "T12:00").toLocaleDateString([],
+        { month: "short", day: "numeric" });
+    }
+    const hit = el("rect", { x: padL + i * step, y: 0, width: step,
+      height: H - padB, fill: "transparent" }, svg);
+    const title = new Date(d.date + "T12:00").toLocaleDateString([],
+      { weekday: "long", month: "long", day: "numeric" });
+    for (const ev of ["pointermove", "pointerenter"])
+      hit.addEventListener(ev, (e) => showTip(e, title, [
+        { value: fmt(d.total) + " tokens", name: `${d.msgs} responses · ${money(d.cost)}` },
+        ...modelSort(Object.keys(d.models)).map(n => ({
+          color: modelColor(n), value: fmt(d.models[n]), name: n })),
+      ]));
+    hit.addEventListener("pointerleave", hideTip);
+  });
+  el("line", { x1: padL, x2: W, y1: H - padB, y2: H - padB,
+    stroke: css("--baseline"), "stroke-width": 1 }, svg);
+
+  for (const n of names) {
+    const span = document.createElement("span");
+    const k = document.createElement("span");
+    k.className = "key"; k.style.background = modelColor(n);
+    span.appendChild(k); span.appendChild(document.createTextNode(n));
+    legend.appendChild(span);
+  }
+
+  /* table view */
+  const tbl = $("#daily-table"); tbl.textContent = "";
+  const table = document.createElement("table"); table.className = "stats";
+  table.innerHTML = "<thead><tr><th>Date</th><th class=num>Total</th>" +
+    "<th class=num>Output</th><th class=num>Cache read</th><th class=num>Cache write</th>" +
+    "<th class=num>Input</th><th class=num>Cost</th><th class=num>Responses</th></tr></thead>";
+  const tb = document.createElement("tbody");
+  for (const d of [...days].reverse()) {
+    const tr = document.createElement("tr");
+    const cells = [d.date, fmtFull(d.total), fmtFull(d.out), fmtFull(d.cr),
+      fmtFull(d.cw), fmtFull(d.in), money(d.cost), d.msgs];
+    cells.forEach((c, i) => { const td = document.createElement("td");
+      if (i > 0) td.className = "num"; td.textContent = c; tr.appendChild(td); });
+    tb.appendChild(tr);
+  }
+  table.appendChild(tb); tbl.appendChild(table);
+}
+
+function renderCost(data) {
+  const host = $("#cost-chart"); host.textContent = "";
+  const days = data.daily;
+  if (!days.length) return;
+  const wAvail = host.parentElement.clientWidth || 520;
+  const step = Math.max(10, Math.min(40, (wAvail - 46) / days.length));
+  const W = Math.max(wAvail, 46 + step * days.length), H = 180, padB = 24, padT = 12, padL = 40;
+  const svg = el("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}` }, host);
+  const max = Math.max(...days.map(d => d.cost), 1);
+  const ticks = niceTicks(max);
+  const yMax = ticks[ticks.length - 1];
+  const y = (v) => padT + (H - padB - padT) * (1 - v / yMax);
+  for (const tv of ticks) {
+    el("line", { x1: padL, x2: W, y1: y(tv), y2: y(tv), stroke: css("--grid") }, svg);
+    const t = el("text", { x: padL - 5, y: y(tv) + 3.5, fill: css("--muted"),
+      "font-size": 10.5, "text-anchor": "end" }, svg);
+    t.textContent = "$" + (yMax >= 20 ? Math.round(tv) : tv.toFixed(1));
+  }
+  const bw = Math.min(24, step - 3);
+  days.forEach((d, i) => {
+    const x = padL + i * step + (step - bw) / 2;
+    const h = (H - padB - padT) * (d.cost / yMax);
+    if (h > 0.5) el("path", { d: roundedTopPath(x, y(d.cost), bw, h, 4),
+      fill: css("--s2") }, svg);
+    const every = Math.ceil(days.length / Math.floor(W / 78));
+    if (i % every === 0) {
+      const t = el("text", { x: x + bw / 2, y: H - 7, fill: css("--muted"),
+        "font-size": 10.5, "text-anchor": "middle" }, svg);
+      t.textContent = new Date(d.date + "T12:00").toLocaleDateString([],
+        { month: "short", day: "numeric" });
+    }
+    const hit = el("rect", { x: padL + i * step, y: 0, width: step, height: H - padB,
+      fill: "transparent" }, svg);
+    for (const ev of ["pointermove", "pointerenter"])
+      hit.addEventListener(ev, (e) => showTip(e,
+        new Date(d.date + "T12:00").toLocaleDateString([], { weekday: "long",
+          month: "long", day: "numeric" }),
+        [{ color: css("--s2"), value: money(d.cost), name: "API-equivalent" }]));
+    hit.addEventListener("pointerleave", hideTip);
+  });
+  el("line", { x1: padL, x2: W, y1: H - padB, y2: H - padB,
+    stroke: css("--baseline") }, svg);
+}
+
+function renderHeatmap(data) {
+  const host = $("#heatmap"); host.textContent = "";
+  const hm = data.heatmap;
+  const max = Math.max(...hm.flat(), 1);
+  const cell = 17, gap = 2, padL = 34, padT = 16;
+  const W = padL + 24 * (cell + gap), H = padT + 7 * (cell + gap) + 4;
+  const svg = el("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}` }, host);
+  const ramp = ["--seq-100", "--seq-200", "--seq-300", "--seq-400", "--seq-500",
+                "--seq-600", "--seq-700"];
+  for (let h = 0; h < 24; h += 6) {
+    const t = el("text", { x: padL + h * (cell + gap), y: 10, fill: css("--muted"),
+      "font-size": 10 }, svg);
+    t.textContent = String(h).padStart(2, "0");
+  }
+  for (let d = 0; d < 7; d++) {
+    const t = el("text", { x: padL - 6, y: padT + d * (cell + gap) + cell - 4,
+      fill: css("--muted"), "font-size": 10, "text-anchor": "end" }, svg);
+    t.textContent = wd[d];
+    for (let h = 0; h < 24; h++) {
+      const v = hm[d][h];
+      const frac = v / max;
+      const fill = v === 0 ? css("--grid")
+        : css(ramp[Math.min(ramp.length - 1, Math.floor(Math.sqrt(frac) * ramp.length))]);
+      const r = el("rect", { x: padL + h * (cell + gap), y: padT + d * (cell + gap),
+        width: cell, height: cell, rx: 3.5, fill }, svg);
+      if (v > 0) {
+        for (const ev of ["pointermove", "pointerenter"])
+          r.addEventListener(ev, (e) => showTip(e,
+            `${wd[d]} ${String(h).padStart(2, "0")}:00–${String(h + 1).padStart(2, "0")}:00`,
+            [{ value: fmt(v) + " tokens" }]));
+        r.addEventListener("pointerleave", hideTip);
+      }
+    }
+  }
+}
+
+function hBarTable(host, rows, colorFor) {
+  /* rows: [{name, value, sub, color}] sorted desc */
+  host.textContent = "";
+  const max = Math.max(...rows.map(r => r.value), 1);
+  const table = document.createElement("table"); table.className = "stats";
+  const tb = document.createElement("tbody");
+  for (const r of rows) {
+    const tr = document.createElement("tr");
+    const td1 = document.createElement("td");
+    if (r.color) { const sw = document.createElement("span");
+      sw.className = "swatch"; sw.style.background = r.color; td1.appendChild(sw); }
+    td1.appendChild(document.createTextNode(r.name));
+    td1.style.whiteSpace = "nowrap";
+    const td2 = document.createElement("td"); td2.className = "bar-cell";
+    td2.style.width = "45%";
+    const bar = document.createElement("div"); bar.className = "bar-bg";
+    bar.style.width = Math.max(2, 100 * r.value / max) + "%";
+    bar.style.background = r.color || css("--seq-300");
+    td2.appendChild(bar);
+    const td3 = document.createElement("td"); td3.className = "num";
+    td3.style.whiteSpace = "nowrap";
+    td3.textContent = fmt(r.value);
+    const td4 = document.createElement("td"); td4.className = "num";
+    td4.style.cssText = "color:var(--muted);white-space:nowrap";
+    td4.textContent = r.sub || "";
+    for (const td of [td1, td2, td3, td4]) tr.appendChild(td);
+    tb.appendChild(tr);
+  }
+  table.appendChild(tb); host.appendChild(table);
+}
+
+function renderModels(data) {
+  const names = modelSort(Object.keys(data.models));
+  $("#models-sub").textContent =
+    "Total tokens and API-equivalent cost in the selected range";
+  hBarTable($("#models-table"), names.map(n => {
+    const m = data.models[n];
+    return { name: n, value: m.total, color: modelColor(n),
+      sub: `${money(m.cost)} · ${m.msgs} resp.` };
+  }).sort((a, b) => b.value - a.value));
+}
+
+function renderProjects(data) {
+  const rows = Object.entries(data.projects)
+    .map(([name, p]) => ({ name, value: p.total,
+      sub: `${money(p.cost)} · ${p.sessions} sess.` }))
+    .sort((a, b) => b.value - a.value).slice(0, 10);
+  hBarTable($("#projects-table"), rows);
+}
+
+function renderTools(data) {
+  const rows = Object.entries(data.tools)
+    .map(([name, v]) => ({ name: name.replace(/^mcp__/, "").slice(0, 26), value: v,
+      sub: "" }));
+  hBarTable($("#tools-table"), rows.slice(0, 9));
+}
+
+function renderCache(data) {
+  const host = $("#cache-body"); host.textContent = "";
+  const c = data.cache;
+  const totalIn = c.read + c.w5 + c.w1 + c.uncached_in;
+  const hit = totalIn ? Math.round(100 * c.read / totalIn) : 0;
+  const p1 = document.createElement("div");
+  p1.className = "tile";
+  p1.innerHTML = `<div class="value"></div><div class="delta"></div>`;
+  p1.querySelector(".value").textContent = hit + "% cache hit rate";
+  p1.querySelector(".delta").textContent = "share of all context tokens served from cache";
+  host.appendChild(p1);
+  const table = document.createElement("table"); table.className = "stats";
+  table.style.marginTop = "10px";
+  const rows = [
+    ["Cache reads (0.1× price)", c.read],
+    ["Cache writes · 1h TTL (2×)", c.w1],
+    ["Cache writes · 5m TTL (1.25×)", c.w5],
+    ["Uncached input (1×)", c.uncached_in],
+  ];
+  const tb = document.createElement("tbody");
+  for (const [name, v] of rows) {
+    const tr = document.createElement("tr");
+    const td1 = document.createElement("td"); td1.textContent = name;
+    const td2 = document.createElement("td"); td2.className = "num";
+    td2.textContent = fmtFull(v);
+    tr.appendChild(td1); tr.appendChild(td2); tb.appendChild(tr);
+  }
+  table.appendChild(tb); host.appendChild(table);
+}
+
+function renderTotals(data) {
+  const host = $("#totals-body"); host.textContent = "";
+  const t = data.totals;
+  $("#totals-sub").textContent = data.days ? `Last ${data.days} days` : "All time";
+  const rows = [
+    ["Total tokens", fmt(t.total)],
+    ["API-equiv. cost", money(t.cost)],
+    ["Output tokens", fmt(t.out)],
+    ["Responses", fmtFull(t.msgs)],
+    ["Sessions", fmtFull(t.sessions)],
+    ["Subagent share", t.total ? Math.round(100 * t.side_tokens / t.total) + "%" : "0%"],
+    ["Avg per day", fmt(t.total / Math.max(1, data.daily.length))],
+  ];
+  const table = document.createElement("table"); table.className = "stats";
+  const tb = document.createElement("tbody");
+  for (const [name, v] of rows) {
+    const tr = document.createElement("tr");
+    const td1 = document.createElement("td"); td1.textContent = name;
+    td1.style.color = "var(--ink-2)";
+    const td2 = document.createElement("td"); td2.className = "num";
+    td2.style.fontWeight = "650"; td2.textContent = v;
+    tr.appendChild(td1); tr.appendChild(td2); tb.appendChild(tr);
+  }
+  table.appendChild(tb); host.appendChild(table);
+}
+
+/* ============================================================ data flow */
+
+let currentDays = 30;
+let allTimeCache = null;
+
+async function refresh() {
+  try {
+    const url = "/data" + (currentDays ? "?days=" + currentDays : "");
+    const data = await (await fetch(url)).json();
+    /* all-time totals for the "All history" tile (fetch once, reuse) */
+    if (!currentDays) {
+      allTimeCache = { total: data.totals.total, cost: data.totals.cost };
+    } else if (!allTimeCache) {
+      const all = await (await fetch("/data")).json();
+      allTimeCache = { total: all.totals.total, cost: all.totals.cost };
+    }
+    data.all_total = allTimeCache.total;
+    data.all_cost = allTimeCache.cost;
+
+    renderLive(data);
+    renderBlock(data);
+    renderBlocksChart(data);
+    renderDaily(data);
+    renderCost(data);
+    renderHeatmap(data);
+    renderModels(data);
+    renderProjects(data);
+    renderTools(data);
+    renderCache(data);
+    renderTotals(data);
+
+    $("#since").textContent = "since " + new Date(data.since * 1000)
+      .toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" });
+    $("#updated").textContent = "updated " + new Date(data.generated_at * 1000)
+      .toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  } catch (err) {
+    $("#updated").textContent = "refresh failed — is server.py running?";
+  }
+}
+
+$("#filters").addEventListener("click", (e) => {
+  const btn = e.target.closest("button");
+  if (!btn) return;
+  for (const b of $("#filters").querySelectorAll("button")) b.classList.remove("on");
+  btn.classList.add("on");
+  currentDays = btn.dataset.days ? parseInt(btn.dataset.days, 10) : null;
+  refresh();
+});
+
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", refresh);
+addEventListener("resize", () => { clearTimeout(window.__rz);
+  window.__rz = setTimeout(refresh, 250); });
+
+refresh();
+setInterval(refresh, 30000);
+</script>
+</body>
+</html>
