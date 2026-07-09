@@ -5,31 +5,122 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>claude·stats</title>
 <style>
-  :root { color-scheme: dark; }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; }
-  body { background: #04100a; color: #7fdca6;
+
+  /* ---------------------------------------------------------------- skins --
+     Both skins render the same payload and the same sections. The terminal
+     skin draws them as character-cell art; the clean skin as DOM + SVG. */
+  body[data-skin="terminal"] #clean { display: none; }
+  body[data-skin="clean"]    #term  { display: none; }
+
+  /* ---- terminal skin: palettes ------------------------------------------ */
+  body[data-skin="terminal"] { color-scheme: dark; }
+  body[data-palette="phosphor"] {
+    --bg:#04100a; --fg:#7fdca6; --ln:#2bff9e; --proj:#1f8a5c; --gd:#1c5c3d;
+    --ax:#256b47; --hd:#57ffb0; --dim:#3d7a5c; --warn:#ffd166; --crit:#ff6b5f;
+    --hover:#9dffce; --glow: 0 0 7px rgba(43,255,158,.40);
+  }
+  body[data-palette="amber"] {
+    --bg:#120b02; --fg:#d9a441; --ln:#ffb000; --proj:#8a5a1f; --gd:#5c3d14;
+    --ax:#6b4a1c; --hd:#ffc95c; --dim:#7a5a2e; --warn:#ffd166; --crit:#ff6b5f;
+    --hover:#ffd899; --glow: 0 0 7px rgba(255,176,0,.45);
+  }
+  body[data-palette="slate"] {
+    --bg:#16181d; --fg:#c3c8d1; --ln:#79c0ff; --proj:#3f5b7a; --gd:#2b3340;
+    --ax:#3a4351; --hd:#e6edf3; --dim:#6b7480; --warn:#e3b341; --crit:#f85149;
+    --hover:#a6d5ff; --glow: none;
+  }
+
+  body[data-skin="terminal"] { background: var(--bg); color: var(--fg);
     font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace; }
-  #app { white-space: pre; padding: 14px 16px; font-size: 13px; line-height: 1.34;
+  #term { white-space: pre; padding: 14px 16px; font-size: 13px; line-height: 1.34;
     min-height: 100vh; overflow-x: auto; }
-  .ln   { color: #2bff9e; text-shadow: 0 0 7px rgba(43,255,158,.40); }
-  .proj { color: #1f8a5c; }
-  .gd   { color: #1c5c3d; }
-  .ax   { color: #256b47; }
-  .hd   { color: #57ffb0; }
-  .dim  { color: #3d7a5c; }
-  .bar  { color: #2bff9e; }
-  .warn { color: #ffd166; }
-  .crit { color: #ff6b5f; }
+  .ln   { color: var(--ln); text-shadow: var(--glow); }
+  .proj { color: var(--proj); }
+  .gd   { color: var(--gd); }
+  .ax   { color: var(--ax); }
+  .hd   { color: var(--hd); }
+  .dim  { color: var(--dim); }
+  .bar  { color: var(--ln); }
+  .warn { color: var(--warn); }
+  .crit { color: var(--crit); }
   .tog  { cursor: pointer; }
-  .tog.on  { color: #57ffb0; }
-  .tog.off { color: #3d7a5c; }
-  .tog:hover { color: #9dffce; }
+  .tog.on  { color: var(--hd); }
+  .tog.off { color: var(--dim); }
+  .tog:hover { color: var(--hover); }
+
+  /* ---- clean skin -------------------------------------------------------- */
+  body[data-skin="clean"] {
+    color-scheme: light dark;
+    --page:#f9f9f7; --surface:#fcfcfb; --ink:#0b0b0b; --ink-2:#52514e;
+    --muted:#898781; --grid:#e1e0d9; --border:rgba(11,11,11,.10);
+    --accent:#2a78d6; --accent-soft:rgba(42,120,214,.13);
+    --good:#0ca30c; --warn:#c98500; --crit:#d03b3b; --track:#e8e7e1;
+    background: var(--page); color: var(--ink);
+    font-family: ui-sans-serif, -apple-system, "SF Pro Text", "Inter", system-ui, sans-serif;
+    font-feature-settings: "tnum" 1;
+  }
+  @media (prefers-color-scheme: dark) {
+    body[data-skin="clean"] {
+      --page:#0d0d0d; --surface:#1a1a19; --ink:#ffffff; --ink-2:#c3c2b7;
+      --muted:#898781; --grid:#2c2c2a; --border:rgba(255,255,255,.10);
+      --accent:#3987e5; --accent-soft:rgba(57,135,229,.16);
+      --good:#0ca30c; --warn:#e3b341; --crit:#e66767; --track:#2c2c2a;
+    }
+  }
+  #clean { padding: 20px 22px 26px; max-width: 1180px; margin: 0 auto; }
+  .card { background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 18px 20px; margin-bottom: 14px; }
+  .top { display: flex; align-items: baseline; justify-content: space-between;
+    gap: 16px; flex-wrap: wrap; margin-bottom: 4px; }
+  .title { font-size: 15px; font-weight: 620; letter-spacing: -0.01em; }
+  .resets { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .seg { display: inline-flex; gap: 2px; background: var(--track);
+    border-radius: 8px; padding: 2px; }
+  .seg button { font: inherit; font-size: 12px; border: 0; cursor: pointer;
+    background: transparent; color: var(--ink-2); padding: 4px 10px;
+    border-radius: 6px; line-height: 1.5; }
+  .seg button.on { background: var(--surface); color: var(--ink); font-weight: 600;
+    box-shadow: 0 1px 2px rgba(0,0,0,.10); }
+  .seg button:hover:not(.on) { color: var(--ink); }
+  .bars { display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    margin-top: 2px; font-size: 13px; }
+  .meter { flex: 1 1 220px; height: 8px; min-width: 160px;
+    background: var(--track); border-radius: 999px; overflow: hidden; }
+  .meter > i { display: block; height: 100%; border-radius: 999px;
+    background: var(--accent); }
+  .meter.warn > i { background: var(--warn); }
+  .meter.crit > i { background: var(--crit); }
+  .big { font-size: 22px; font-weight: 660; letter-spacing: -0.02em; }
+  .sub { color: var(--muted); font-size: 13px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 720px) { .grid2 { grid-template-columns: 1fr; } }
+  .rows { margin-top: 10px; display: grid; gap: 7px; }
+  .row { display: grid; grid-template-columns: 96px 1fr 62px; align-items: center;
+    gap: 10px; font-size: 13px; }
+  .row .nm { color: var(--ink-2); overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; }
+  .row .tr { height: 6px; background: var(--track); border-radius: 999px; overflow: hidden; }
+  .row .tr > i { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
+  .row .vl { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .spark { display: flex; align-items: flex-end; gap: 3px; height: 34px; margin-top: 8px; }
+  .spark > i { flex: 1 1 0; background: var(--track); border-radius: 2px; min-height: 2px; }
+  .spark > i.on { background: var(--accent); }
+  .lbl { font-size: 11px; font-weight: 600; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--muted); }
+  .foot { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .empty { color: var(--muted); font-size: 14px; padding: 8px 0 4px; }
+  svg { display: block; width: 100%; height: auto; }
+  .settings { display: flex; gap: 14px; align-items: center; flex-wrap: wrap;
+    margin-bottom: 14px; }
+
   @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
 </style>
 </head>
-<body>
-<div id="app">loading…</div>
+<body data-skin="terminal" data-palette="phosphor">
+<div id="term">loading…</div>
+<div id="clean"></div>
 
 <script>
 "use strict";
@@ -39,12 +130,15 @@ const fmt = (n) => { n = +n;
   if (n >= 1e3) return (n/1e3).toFixed(0)+"K";
   return ""+Math.round(n); };
 const hmm = (sec) => new Date(sec*1000).toLocaleTimeString([], {hour:"2-digit", minute:"2-digit", hour12:false});
-const esc = (s) => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+const esc = (s) => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 const braille = (b) => String.fromCharCode(0x2800 + b);
 const DOT = [[0x01,0x02,0x04,0x40],[0x08,0x10,0x20,0x80]]; // [col&1][row&3]
 const LV = " ▁▂▃▄▅▆▇█";
 function niceMax(v){ if(v<=0) return 1; const mag=Math.pow(10,Math.floor(Math.log10(v)));
   for(const m of [1,1.5,2,2.5,3,4,5,7.5,10]) if(m*mag>=v) return m*mag; return 10*mag; }
+
+const SKINS = ["terminal","clean"];
+const PALETTES = ["phosphor","amber","slate"];
 
 // ---- data source (baked artifact / native app bridge / server) ----
 let __bridge = null;
@@ -57,14 +151,83 @@ async function getData(days){
   const r=await fetch("/data"+(days?"?days="+days:"")); return r.json();
 }
 
-const state = { mode: "all", data: null, cols: 90, rows: 30 };
+// ---- appearance config -----------------------------------------------------
+// In the native app this round-trips through Python (~/.claude-stats/config.json),
+// because pywebview runs private_mode=True and clears localStorage each launch.
+// In a browser there is no bridge, so fall back to localStorage.
+const CFG_KEY = "claude-stats-appearance";
+const cleanCfg = (c) => ({
+  skin: SKINS.includes(c && c.skin) ? c.skin : "terminal",
+  palette: PALETTES.includes(c && c.palette) ? c.palette : "phosphor",
+});
+async function loadConfig(){
+  try {
+    if(window.__APP__){ await bridgeReady(); return cleanCfg(await window.pywebview.api.get_config()); }
+    return cleanCfg(JSON.parse(localStorage.getItem(CFG_KEY)));
+  } catch(e){ return cleanCfg(null); }
+}
+async function saveConfig(cfg){
+  try {
+    if(window.__APP__){ await bridgeReady(); return cleanCfg(await window.pywebview.api.set_config(cfg.skin, cfg.palette)); }
+    localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
+  } catch(e){ /* settings are best-effort; never break the dashboard */ }
+  return cfg;
+}
+
+// `ready` gates appearance writes: until loadConfig() has resolved, `skin` and
+// `palette` still hold defaults, so persisting them would clobber stored settings.
+const state = { mode:"all", data:null, cols:90, rows:30, skin:"terminal", palette:"phosphor", ready:false };
 const tokVal = (o) => { const io=(o.in||0)+(o.out||0);
   return state.mode==="all" ? io+(o.cr||0)+(o.cw||0)
     : state.mode==="processed" ? io+(o.cw||0)
     : state.mode==="content" ? io
     : (o.out||0); };  // "output"
 
-// ---- monospace metrics: chars-per-row AND rows-per-window, then render ----
+const MODE_FORMULA = {
+  all:"input + output + cache reads + writes",
+  processed:"input + output + cache writes",
+  content:"input + output (prompts + replies)",
+  output:"output only (what Claude wrote)",
+};
+
+// ---- shared derivation: both skins draw exactly this -----------------------
+function windowStats(ws, mode, now){
+  const used = ws.used[mode], ceiling = ws.max[mode];
+  const x0 = ws.start, x1 = ws.end;
+  const elapsed = Math.max((now-x0)/60, 0.5), rem = Math.max((x1-now)/60, 0);
+  const burn = used/elapsed, proj = used + burn*rem;
+  const nowFrac = Math.max(0, Math.min(1, (now-x0)/(x1-x0)));
+  const pts = ws.points || [];
+
+  // dynamic y: scale to THIS window's usage (+ headroom), not the all-time peak.
+  let base = Math.max(used*1.3, Math.min(proj, used*2.4)*1.05);
+  if (base <= 0) base = Math.max(ceiling*0.1, 1);
+  const ymax = niceMax(base);
+
+  const realAt = (t) => {
+    if(!pts.length) return 0;
+    if(t<=pts[0].t) return 0;
+    for(let i=1;i<pts.length;i++) if(t<=pts[i].t){ const a=pts[i-1],b=pts[i];
+      const f=(t-a.t)/((b.t-a.t)||1); return a[mode]+(b[mode]-a[mode])*f; }
+    return pts[pts.length-1][mode];
+  };
+  const yAt = (xn) => xn<=nowFrac ? realAt(x0+xn*(x1-x0))
+                                  : used + (proj-used)*((xn-nowFrac)/((1-nowFrac)||1));
+  return { used, ceiling, x0, x1, burn, proj, nowFrac, ymax, yAt,
+           pct: ceiling?Math.round(100*used/ceiling):0,
+           projPct: ceiling?Math.round(100*proj/ceiling):0,
+           over: proj>ceiling, peakFits: ceiling<=ymax*1.001 };
+}
+function hourTicks(x0,x1){ const out=[];
+  for(let t=Math.ceil(x0/3600)*3600; t<=x1; t+=3600) out.push({t, frac:(t-x0)/(x1-x0), label:hmm(t)});
+  return out; }
+function topRows(obj,n){ return Object.entries(obj).sort((a,b)=>tokVal(b[1])-tokVal(a[1])).slice(0,n); }
+function resetsIn(ws,now){ const m=Math.max(0,Math.floor((ws.end-now)/60));
+  return (m>=60?Math.floor(m/60)+"h ":"")+(m%60)+"m"; }
+
+/* ==========================================================================
+   TERMINAL SKIN — character-cell art
+   ========================================================================== */
 function relayout(){
   const FONT="visibility:hidden;position:absolute;white-space:pre;"+
     "font:13px/1.34 ui-monospace,'SF Mono','Cascadia Code',Menlo,monospace";
@@ -75,13 +238,12 @@ function relayout(){
   const cw=Math.max(measure("0".repeat(200)).width/200, measure("─".repeat(200)).width/200,
                     measure("⣿".repeat(200)).width/200, measure("█".repeat(200)).width/200);
   const lh=measure(Array(20).fill("0".repeat(20)).join("\n")).height/20;
-  const app=document.getElementById("app");
+  const app=document.getElementById("term");
   state.cols=Math.max(30, Math.min(160, Math.floor((app.clientWidth-32)/cw) - 1));
   state.rows=Math.max(6, Math.floor((window.innerHeight-28)/lh));
   render();
 }
 
-// ---- helpers to compose framed lines ----
 function ruleTop(title, right, CW){
   const l="┌─ ", r=" ─┐";
   const fill=Math.max(1, CW-(l.length+title.length+1+1+right.length+1+r.length));
@@ -96,7 +258,6 @@ function blockbars(hs, peak, activeIdx){
   return hs.map((v,i)=>{ const l=Math.max(1,Math.min(8,Math.round((v/(peak||1))*8)));
     return i===activeIdx?`<span class="ln">${LV[l]}</span>`:`<span class="dim">${LV[l]}</span>`; }).join("");
 }
-// one "name ████···· value" cell of fixed plain width (name + bar + 6-wide value)
 function cell(name, val, maxv, nameW, barW){
   const nm=(name.length>nameW?name.slice(0,nameW):name).padEnd(nameW);
   const w=Math.max(0,Math.min(barW,Math.round(barW*val/(maxv||1))));
@@ -106,52 +267,36 @@ function cell(name, val, maxv, nameW, barW){
           `<span class="gd">${"·".repeat(barW-w)}</span> <span class="dim">${esc(vs)}</span>`;
   return { t, h };
 }
+function tog(mode, label){ const on=state.mode===mode;
+  return `<span class="tog ${on?"on":"off"}" data-mode="${mode}">${on?"[":" "}${label}${on?"]":" "}</span>`; }
+function togSkin(v,label){ const on=state.skin===v;
+  return `<span class="tog ${on?"on":"off"}" data-skin-set="${v}">${on?"[":" "}${label}${on?"]":" "}</span>`; }
+function togPal(v,label){ const on=state.palette===v;
+  return `<span class="tog ${on?"on":"off"}" data-palette-set="${v}">${on?"[":" "}${label}${on?"]":" "}</span>`; }
 
-// ---- the graph: dynamic y-axis, bright real line + dim projection ----
-function buildGraph(Wc, Hc, ws, mode, now){
-  const used = ws.used[mode], ceiling = ws.max[mode];
-  const x0 = ws.start, x1 = ws.end;
-  const elapsed = Math.max((now-x0)/60, 0.5), rem = Math.max((x1-now)/60, 0);
-  const burn = used/elapsed, projRaw = used + burn*rem;
-  const nowFrac = Math.max(0, Math.min(1, (now-x0)/(x1-x0)));
-  const pts = ws.points || [];
-
-  // dynamic y: scale to THIS window's usage (+ headroom), not the all-time peak.
-  let base = Math.max(used*1.3, Math.min(projRaw, used*2.4)*1.05);
-  if (base <= 0) base = Math.max(ceiling*0.1, 1);
-  const ymax = niceMax(base);
-
-  const realAt = (t) => {
-    if(!pts.length) return 0;
-    if(t<=pts[0].t) return 0;
-    for(let i=1;i<pts.length;i++) if(t<=pts[i].t){ const a=pts[i-1],b=pts[i];
-      const f=(t-a.t)/((b.t-a.t)||1); return a[mode]+(b[mode]-a[mode])*f; }
-    return pts[pts.length-1][mode];
-  };
-  const yAt = (xn) => xn<=nowFrac ? realAt(x0+xn*(x1-x0))
-                                  : used + (projRaw-used)*((xn-nowFrac)/((1-nowFrac)||1));
-
+// braille raster of the shared yAt curve
+function rasterGraph(Wc, Hc, st){
   const dotW=Wc*2, dotH=Hc*4;
   const grid=Array.from({length:Hc},()=>new Array(Wc).fill(0));
   const kind=Array.from({length:Hc},()=>new Array(Wc).fill(0));
   const set=(dc,dr,fut)=>{ if(dr<0||dr>=dotH||dc<0||dc>=dotW) return;
-    const cr=dr>>2, cc=dc>>1; grid[cr][cc]|=DOT[dc&1][dr&3]; if(kind[cr][cc]!==1) kind[cr][cc]=fut?2:1; if(!fut) kind[cr][cc]=1; };
+    const cr=dr>>2, cc=dc>>1; grid[cr][cc]|=DOT[dc&1][dr&3];
+    if(kind[cr][cc]!==1) kind[cr][cc]=fut?2:1; if(!fut) kind[cr][cc]=1; };
   let prev=null;
   for(let c=0;c<dotW;c++){
-    const xn=c/(dotW-1), y=yAt(xn);
-    let row=Math.round((1-Math.min(y,ymax)/ymax)*(dotH-1)); row=Math.max(0,Math.min(dotH-1,row));
-    const fut = xn>nowFrac+1e-9;
+    const xn=c/(dotW-1), y=st.yAt(xn);
+    let row=Math.round((1-Math.min(y,st.ymax)/st.ymax)*(dotH-1)); row=Math.max(0,Math.min(dotH-1,row));
+    const fut = xn>st.nowFrac+1e-9;
     if(prev!=null){ const lo=Math.min(prev,row),hi=Math.max(prev,row); for(let r=lo;r<=hi;r++) set(c,r,fut); }
     else set(c,row,fut);
     prev=row;
   }
-  const peakFits = ceiling<=ymax*1.001;
-  const peakRow = peakFits ? (Math.round((1-ceiling/ymax)*(dotH-1))>>2) : -1;
+  const peakRow = st.peakFits ? (Math.round((1-st.ceiling/st.ymax)*(dotH-1))>>2) : -1;
 
   const G=7, lines=[];
   const yl=(v)=> fmt(v).padStart(G-1)+" ";
   for(let r=0;r<Hc;r++){
-    const gut = r===0 ? yl(ymax) : r===Hc-1 ? yl(0) : " ".repeat(G);
+    const gut = r===0 ? yl(st.ymax) : r===Hc-1 ? yl(0) : " ".repeat(G);
     let cells="";
     for(let c=0;c<Wc;c++){
       const b=grid[r][c];
@@ -160,162 +305,328 @@ function buildGraph(Wc, Hc, ws, mode, now){
       else cells+=" ";
     }
     let right="";
-    if(r===peakRow) right=`<span class="gd"> peak ${fmt(ceiling)}</span>`;
-    else if(r===0 && !peakFits) right=`<span class="gd"> ↑ peak ${fmt(ceiling)}</span>`;
+    if(r===peakRow) right=`<span class="gd"> peak ${fmt(st.ceiling)}</span>`;
+    else if(r===0 && !st.peakFits) right=`<span class="gd"> ↑ peak ${fmt(st.ceiling)}</span>`;
     lines.push(`<span class="ax">${gut}│</span>${cells}${right}`);
   }
-  // x axis + hourly ticks
   lines.push(`<span class="ax">${" ".repeat(G)}└${"─".repeat(Wc)}</span>`);
   const tick=new Array(Wc).fill(" ");
-  for(let t=Math.ceil(x0/3600)*3600; t<=x1; t+=3600){
-    const col=Math.round((t-x0)/(x1-x0)*(Wc-1)), lab=hmm(t);
-    for(let i=0;i<lab.length;i++){ const p=col+i; if(p>=0&&p<Wc) tick[p]=lab[i]; }
+  for(const {frac,label} of hourTicks(st.x0,st.x1)){
+    const col=Math.round(frac*(Wc-1));
+    for(let i=0;i<label.length;i++){ const p=col+i; if(p>=0&&p<Wc) tick[p]=label[i]; }
   }
   lines.push(`<span class="ax">${" ".repeat(G+1)}</span><span class="dim">${esc(tick.join(""))}</span>`);
-
-  return { lines, used, ceiling, burn, projRaw, peakFits };
+  return lines;
 }
 
-function tog(mode, label){ const on=state.mode===mode;
-  return `<span class="tog ${on?"on":"off"}" data-mode="${mode}">${on?"[":" "}${label}${on?"]":" "}</span>`; }
-
-function render(){
-  const app=document.getElementById("app");
-  const d=state.data;
-  if(!d){ app.textContent="loading…"; return; }
+function renderTerminal(d, now, clock){
+  const app=document.getElementById("term");
   const CW=state.cols;
-  const now=Date.now()/1000;
-  const clock=new Date().toLocaleTimeString([], {hour12:false});
   const ws=d.window_series;
   const L=[];
 
-  if(ws && now < ws.end){
-    const remMin=Math.max(0,Math.floor((ws.end-now)/60));
-    const resets=(remMin>=60?Math.floor(remMin/60)+"h ":"")+(remMin%60)+"m";
-
-    // data for the optional bottom sections
-    const mrows=Object.entries(d.models).sort((a,b)=>tokVal(b[1])-tokVal(a[1])).slice(0,4);
-    const prows=Object.entries(d.projects).sort((a,b)=>tokVal(b[1])-tokVal(a[1])).slice(0,4);
-    const showProj = CW >= 64;
-    const maxN=Math.max(mrows.length, showProj?prows.length:0);
-
-    // ---- responsive budget: always keep graph + usage; add the rest only if it fits.
-    // As the window shrinks, sections drop in this order (last listed = first dropped).
-    const minHc=3;
-    let R = state.rows - 2 - (minHc + 2);   // reserve: top rule, used line, min graph (+axis+ticks)
-    const inc={};
-    for(const [k,c] of [["burn",1],["toggle",1],["footer",1],["bottom",1],["recent",1],["break",1+maxN]]){
-      if(R - c >= 0){ inc[k]=true; R-=c; }
-    }
-    // spend leftover: baseline graph, up to 3 spacer blanks, then grow the graph to fill.
-    let Hc=minHc, blanks=0;
-    { const base=Math.max(0,Math.min(R,6)); Hc+=base; R-=base;
-      blanks=Math.max(0,Math.min(3,R)); R-=blanks;
-      Hc+=Math.max(0,Math.min(R, 60-Hc)); }
-    const blank=()=>{ if(blanks>0){ L.push(""); blanks--; } };
-
-    const Wc=Math.max(20, CW-7-1-14);
-    const g=buildGraph(Wc,Hc,ws,state.mode,now);
-
-    L.push(ruleTop("claude·stats — current 5h window", "resets "+resets, CW));
-    if(inc.toggle) L.push(`  <span class="dim">count</span> ${tog("all","all")} ${tog("processed","processed")} ${tog("content","content")} ${tog("output","output")}   <span class="dim">${clock}</span>`);
-    blank();
-    g.lines.forEach(x=>L.push(x));
-    blank();
-    const pct=g.ceiling?Math.round(100*g.used/g.ceiling):0;
-    const projPct=g.ceiling?Math.round(100*g.projRaw/g.ceiling):0;
-    const over=g.projRaw>g.ceiling;
-    const barCls=pct>=100?"crit":pct>=75?"warn":"bar";
-    L.push(`  used <span class="dim">${state.mode}</span> <span class="hd">${fmt(g.used)}</span>  <span class="${barCls}">${pbar(pct,16)}</span> ${pct}% of peak ${fmt(g.ceiling)}`);
-    if(inc.burn) L.push(`  burn ${fmt(g.burn)}/min   proj ${fmt(g.projRaw)}   `+
-           (over?`<span class="crit">▲ on pace to pass peak · ${projPct}%</span>`
-                :`<span class="dim">▼ under peak · ${projPct}%</span>`));
-    if(inc.recent){
-      blank();
-      const allbl=d.blocks||[];
-      const bl=allbl.slice(-Math.max(8, Math.min(allbl.length, CW-44)));
-      const bval=(b=>b[state.mode]);
-      const peakBlk=d.max_block_by[state.mode];
-      const ai=bl.reduce((acc,b,i)=>b.active?i:acc,-1);
-      L.push(`  recent ${blockbars(bl.map(bval),peakBlk,ai)}   today <span class="hd">${fmt(tokVal(d.today))}</span>`+
-             `  <span class="dim">${state.mode} · ${d.today.msgs} resp</span>`);
-    }
-    let modeDefShown=false;
-    if(inc.break){
-      blank();
-      const mmax=Math.max(...mrows.map(r=>tokVal(r[1])),1);
-      const pmax=Math.max(...prows.map(r=>tokVal(r[1])),1);
-      const COL2=33;
-      // "what does this mode count?" — shown in the empty bottom-right space
-      const DESC={
-        all:       ["count · all",       "= input + output +", "  cache reads + writes"],
-        processed: ["count · processed", "= input + output +", "  cache writes"],
-        content:   ["count · content",   "= input + output", "  prompts + replies"],
-        output:    ["count · output",    "= output only", "  what Claude wrote"],
-      }[state.mode];
-      const descW=Math.max(...DESC.map(s=>s.length));
-      const COL3=(showProj?62:29)+3;
-      const showDesc = CW >= COL3+descW;
-      modeDefShown = showDesc;
-      const desc=(idx, plain)=> (showDesc && DESC[idx]!==undefined)
-        ? " ".repeat(Math.max(1, COL3-plain))+`<span class="dim">${esc(DESC[idx])}</span>` : "";
-      const header = showProj
-        ? `  <span class="dim">models</span>${" ".repeat(COL2-8)}<span class="dim">projects</span>`
-        : `  <span class="dim">models</span>`;
-      L.push(header + desc(0, showProj?COL2+8:8));
-      for(let i=0;i<maxN;i++){
-        const m=mrows[i], p=prows[i];
-        const left=m?cell(m[0],tokVal(m[1]),mmax,11,8):{t:"",h:""};
-        let line="  "+left.h, plain=2+left.t.length;
-        if(showProj){ const pad=Math.max(1, COL2-(2+left.t.length)); line+=" ".repeat(pad); plain+=pad;
-          if(p){ const rc=cell(p[0],tokVal(p[1]),pmax,13,8); line+=rc.h; plain+=rc.t.length; } else plain=COL2; }
-        L.push(line + desc(i+1, plain));
-      }
-    }
-    if(inc.bottom) L.push(ruleBottom(CW));
-    if(inc.footer){
-      const peak=`┈ peak = busiest window so far`;
-      if(modeDefShown){
-        L.push(`  <span class="dim">${esc(peak.slice(0,Math.max(0,CW-4)))}</span>`);
-      } else {
-        const formula={all:"input + output + cache reads + writes",
-          processed:"input + output + cache writes",
-          content:"input + output (prompts + replies)",
-          output:"output only (what Claude wrote)"}[state.mode];
-        const dp=`count ${state.mode} = ${formula}`;
-        const dh=`<span class="dim">count </span><span class="hd">${state.mode}</span><span class="dim"> = ${esc(formula)}</span>`;
-        if(2+peak.length+3+dp.length<=CW)
-          L.push(`  <span class="dim">${esc(peak)}</span>${" ".repeat(CW-2-peak.length-dp.length)}${dh}`);
-        else if(2+dp.length<=CW) L.push(`  ${dh}`);
-        else L.push(`  <span class="dim">${esc(dp.slice(0,Math.max(0,CW-4)))}</span>`);
-      }
-    }
-  } else {
+  if(!(ws && now < ws.end)){
     L.push(ruleTop("claude·stats — current 5h window", clock, CW));
     L.push("");
     L.push(`  <span class="dim">no active 5-hour window — it begins with your next Claude message.</span>`);
     const last=d.blocks&&d.blocks.length?d.blocks[d.blocks.length-1]:null;
     if(last) L.push(`  <span class="dim">last window: ${fmt(last.tokens)} tokens · ended ${hmm(last.end)}</span>`);
     L.push("");
+    L.push(`  <span class="dim">skin</span> ${togSkin("terminal","terminal")} ${togSkin("clean","clean")}`+
+           `   <span class="dim">palette</span> ${togPal("phosphor","phosphor")} ${togPal("amber","amber")} ${togPal("slate","slate")}`);
+    L.push("");
     L.push(ruleBottom(CW));
     const foot=`┈ peak = your busiest window so far · /usage = official plan limits`;
     L.push(`  <span class="dim">${esc(foot.slice(0, Math.max(0, CW-4)))}</span>`);
+    app.innerHTML=L.join("\n");
+    return;
+  }
+
+  const st=windowStats(ws, state.mode, now);
+  const mrows=topRows(d.models,4), prows=topRows(d.projects,4);
+  const showProj = CW >= 64;
+  const maxN=Math.max(mrows.length, showProj?prows.length:0);
+
+  // ---- responsive budget: always keep graph + usage; add the rest only if it fits.
+  // As the window shrinks, sections drop in this order (last listed = first dropped).
+  const minHc=3;
+  let R = state.rows - 2 - (minHc + 2);   // reserve: top rule, used line, min graph (+axis+ticks)
+  const inc={};
+  for(const [k,c] of [["burn",1],["toggle",1],["settings",1],["footer",1],["bottom",1],["recent",1],["break",1+maxN]]){
+    if(R - c >= 0){ inc[k]=true; R-=c; }
+  }
+  // spend leftover: baseline graph, up to 3 spacer blanks, then grow the graph to fill.
+  let Hc=minHc, blanks=0;
+  { const base=Math.max(0,Math.min(R,6)); Hc+=base; R-=base;
+    blanks=Math.max(0,Math.min(3,R)); R-=blanks;
+    Hc+=Math.max(0,Math.min(R, 60-Hc)); }
+  const blank=()=>{ if(blanks>0){ L.push(""); blanks--; } };
+
+  const Wc=Math.max(20, CW-7-1-14);
+
+  L.push(ruleTop("claude·stats — current 5h window", "resets "+resetsIn(ws,now), CW));
+  if(inc.toggle) L.push(`  <span class="dim">count</span> ${tog("all","all")} ${tog("processed","processed")} ${tog("content","content")} ${tog("output","output")}   <span class="dim">${clock}</span>`);
+  if(inc.settings) L.push(`  <span class="dim">skin</span> ${togSkin("terminal","terminal")} ${togSkin("clean","clean")}`+
+    `   <span class="dim">palette</span> ${togPal("phosphor","phosphor")} ${togPal("amber","amber")} ${togPal("slate","slate")}`);
+  blank();
+  rasterGraph(Wc,Hc,st).forEach(x=>L.push(x));
+  blank();
+
+  const barCls=st.pct>=100?"crit":st.pct>=75?"warn":"bar";
+  L.push(`  used <span class="dim">${state.mode}</span> <span class="hd">${fmt(st.used)}</span>  <span class="${barCls}">${pbar(st.pct,16)}</span> ${st.pct}% of peak ${fmt(st.ceiling)}`);
+  if(inc.burn) L.push(`  burn ${fmt(st.burn)}/min   proj ${fmt(st.proj)}   `+
+         (st.over?`<span class="crit">▲ on pace to pass peak · ${st.projPct}%</span>`
+                 :`<span class="dim">▼ under peak · ${st.projPct}%</span>`));
+  if(inc.recent){
+    blank();
+    const allbl=d.blocks||[];
+    const bl=allbl.slice(-Math.max(8, Math.min(allbl.length, CW-44)));
+    const peakBlk=d.max_block_by[state.mode];
+    const ai=bl.reduce((acc,b,i)=>b.active?i:acc,-1);
+    L.push(`  recent ${blockbars(bl.map(b=>b[state.mode]),peakBlk,ai)}   today <span class="hd">${fmt(tokVal(d.today))}</span>`+
+           `  <span class="dim">${state.mode} · ${d.today.msgs} resp</span>`);
+  }
+  let modeDefShown=false;
+  if(inc.break){
+    blank();
+    const mmax=Math.max(...mrows.map(r=>tokVal(r[1])),1);
+    const pmax=Math.max(...prows.map(r=>tokVal(r[1])),1);
+    const COL2=33;
+    // "what does this mode count?" — shown in the empty bottom-right space
+    const DESC={
+      all:       ["count · all",       "= input + output +", "  cache reads + writes"],
+      processed: ["count · processed", "= input + output +", "  cache writes"],
+      content:   ["count · content",   "= input + output", "  prompts + replies"],
+      output:    ["count · output",    "= output only", "  what Claude wrote"],
+    }[state.mode];
+    const descW=Math.max(...DESC.map(s=>s.length));
+    const COL3=(showProj?62:29)+3;
+    const showDesc = CW >= COL3+descW;
+    modeDefShown = showDesc;
+    const desc=(idx, plain)=> (showDesc && DESC[idx]!==undefined)
+      ? " ".repeat(Math.max(1, COL3-plain))+`<span class="dim">${esc(DESC[idx])}</span>` : "";
+    const header = showProj
+      ? `  <span class="dim">models</span>${" ".repeat(COL2-8)}<span class="dim">projects</span>`
+      : `  <span class="dim">models</span>`;
+    L.push(header + desc(0, showProj?COL2+8:8));
+    for(let i=0;i<maxN;i++){
+      const m=mrows[i], p=prows[i];
+      const left=m?cell(m[0],tokVal(m[1]),mmax,11,8):{t:"",h:""};
+      let line="  "+left.h, plain=2+left.t.length;
+      if(showProj){ const pad=Math.max(1, COL2-(2+left.t.length)); line+=" ".repeat(pad); plain+=pad;
+        if(p){ const rc=cell(p[0],tokVal(p[1]),pmax,13,8); line+=rc.h; plain+=rc.t.length; } else plain=COL2; }
+      L.push(line + desc(i+1, plain));
+    }
+  }
+  if(inc.bottom) L.push(ruleBottom(CW));
+  if(inc.footer){
+    const peak=`┈ peak = busiest window so far`;
+    if(modeDefShown){
+      L.push(`  <span class="dim">${esc(peak.slice(0,Math.max(0,CW-4)))}</span>`);
+    } else {
+      const formula=MODE_FORMULA[state.mode];
+      const dp=`count ${state.mode} = ${formula}`;
+      const dh=`<span class="dim">count </span><span class="hd">${state.mode}</span><span class="dim"> = ${esc(formula)}</span>`;
+      if(2+peak.length+3+dp.length<=CW)
+        L.push(`  <span class="dim">${esc(peak)}</span>${" ".repeat(CW-2-peak.length-dp.length)}${dh}`);
+      else if(2+dp.length<=CW) L.push(`  ${dh}`);
+      else L.push(`  <span class="dim">${esc(dp.slice(0,Math.max(0,CW-4)))}</span>`);
+    }
   }
   app.innerHTML=L.join("\n");
 }
 
+/* ==========================================================================
+   CLEAN SKIN — DOM + SVG, same sections, same numbers
+   ========================================================================== */
+function svgGraph(st, W, H){
+  const padL=58, padR=18, padT=16, padB=28;
+  const pw=Math.max(10, W-padL-padR), ph=Math.max(10, H-padT-padB);
+  const X=(xn)=>padL+xn*pw;
+  const Y=(v)=>padT+(1-Math.min(v,st.ymax)/st.ymax)*ph;
+
+  const N=240, real=[], future=[];
+  for(let i=0;i<=N;i++){
+    const xn=i/N, p=[X(xn), Y(st.yAt(xn))];
+    if(xn<=st.nowFrac) real.push(p);
+    if(xn>=st.nowFrac) future.push(p);
+  }
+  const d=(pts)=>pts.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");
+  const areaD = real.length
+    ? d(real)+` L ${X(st.nowFrac).toFixed(1)} ${Y(0).toFixed(1)} L ${X(0).toFixed(1)} ${Y(0).toFixed(1)} Z`
+    : "";
+
+  const parts=[];
+  parts.push(`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="cumulative tokens this 5-hour window">`);
+  // y gridlines + labels at 0, half, max
+  for(const v of [0, st.ymax/2, st.ymax]){
+    const y=Y(v).toFixed(1);
+    parts.push(`<line x1="${padL}" y1="${y}" x2="${(W-padR).toFixed(1)}" y2="${y}" stroke="var(--grid)" stroke-width="1"/>`);
+    parts.push(`<text x="${padL-9}" y="${y}" text-anchor="end" dominant-baseline="middle" font-size="11" fill="var(--muted)">${esc(fmt(v))}</text>`);
+  }
+  // peak line — or, when the peak is off the top of the scale, say so (the
+  // terminal skin shows "↑ peak N" in the same case).
+  if(st.peakFits){
+    const y=Y(st.ceiling).toFixed(1);
+    parts.push(`<line x1="${padL}" y1="${y}" x2="${(W-padR).toFixed(1)}" y2="${y}" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 4"/>`);
+    parts.push(`<text x="${(W-padR).toFixed(1)}" y="${(+y-6).toFixed(1)}" text-anchor="end" font-size="11" fill="var(--muted)">peak ${esc(fmt(st.ceiling))}</text>`);
+  } else {
+    parts.push(`<text x="${(W-padR).toFixed(1)}" y="${(padT+10).toFixed(1)}" text-anchor="end" font-size="11" fill="var(--muted)">↑ peak ${esc(fmt(st.ceiling))}</text>`);
+  }
+  // area + real line + projection
+  if(areaD) parts.push(`<path d="${areaD}" fill="var(--accent-soft)"/>`);
+  if(real.length>1) parts.push(`<path d="${d(real)}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`);
+  if(future.length>1) parts.push(`<path d="${d(future)}" fill="none" stroke="${st.over?"var(--crit)":"var(--muted)"}" stroke-width="1.5" stroke-dasharray="4 4" stroke-linecap="round"/>`);
+  // now marker
+  const nx=X(st.nowFrac).toFixed(1);
+  parts.push(`<line x1="${nx}" y1="${padT}" x2="${nx}" y2="${(padT+ph).toFixed(1)}" stroke="var(--border)" stroke-width="1"/>`);
+  if(real.length) parts.push(`<circle cx="${nx}" cy="${Y(st.used).toFixed(1)}" r="3.5" fill="var(--accent)"/>`);
+  // x axis + hourly ticks
+  parts.push(`<line x1="${padL}" y1="${(padT+ph).toFixed(1)}" x2="${(W-padR).toFixed(1)}" y2="${(padT+ph).toFixed(1)}" stroke="var(--border)" stroke-width="1"/>`);
+  for(const {frac,label} of hourTicks(st.x0,st.x1)){
+    const x=X(frac).toFixed(1);
+    parts.push(`<text x="${x}" y="${(padT+ph+16).toFixed(1)}" text-anchor="middle" font-size="11" fill="var(--muted)">${esc(label)}</text>`);
+  }
+  parts.push(`</svg>`);
+  return parts.join("");
+}
+
+function segSkin(){
+  const s=(v,l)=>`<button class="${state.skin===v?"on":""}" data-skin-set="${v}">${l}</button>`;
+  const p=(v,l)=>`<button class="${state.palette===v?"on":""}" data-palette-set="${v}">${l}</button>`;
+  return `<div class="settings">`+
+    `<span class="lbl">skin</span><span class="seg">${s("terminal","terminal")}${s("clean","clean")}</span>`+
+    (state.skin==="terminal"
+      ? `<span class="lbl">palette</span><span class="seg">${p("phosphor","phosphor")}${p("amber","amber")}${p("slate","slate")}</span>`
+      : ``)+
+    `</div>`;
+}
+function segMode(){
+  const m=(v)=>`<button class="${state.mode===v?"on":""}" data-mode="${v}">${v}</button>`;
+  return `<span class="seg">${m("all")}${m("processed")}${m("content")}${m("output")}</span>`;
+}
+function rowsHTML(rows){
+  if(!rows.length) return `<div class="sub">none yet</div>`;
+  const mx=Math.max(...rows.map(r=>tokVal(r[1])),1);
+  return `<div class="rows">`+rows.map(([name,agg])=>{
+    const v=tokVal(agg), w=Math.max(1,Math.round(100*v/mx));
+    return `<div class="row"><span class="nm" title="${esc(name)}">${esc(name)}</span>`+
+      `<span class="tr"><i style="width:${w}%"></i></span>`+
+      `<span class="vl">${esc(fmt(v))}</span></div>`;
+  }).join("")+`</div>`;
+}
+
+function renderClean(d, now, clock){
+  const host=document.getElementById("clean");
+  const ws=d.window_series;
+
+  if(!(ws && now < ws.end)){
+    const last=d.blocks&&d.blocks.length?d.blocks[d.blocks.length-1]:null;
+    host.innerHTML = segSkin()+
+      `<div class="card"><div class="top"><span class="title">Current 5-hour window</span>`+
+      `<span class="resets">${esc(clock)}</span></div>`+
+      `<div class="empty">No active 5-hour window — it begins with your next Claude message.</div>`+
+      (last?`<div class="sub">Last window: ${esc(fmt(last.tokens))} tokens · ended ${esc(hmm(last.end))}</div>`:``)+
+      `</div><div class="foot">peak = your busiest window so far · /usage = official plan limits</div>`;
+    return;
+  }
+
+  const st=windowStats(ws, state.mode, now);
+  const W=Math.max(360, host.clientWidth-40), H=Math.round(Math.min(430, Math.max(240, W*0.34)));
+  const meterCls = st.pct>=100?"crit":st.pct>=75?"warn":"";
+  const bl=(d.blocks||[]).slice(-24);
+  const peakBlk=d.max_block_by[state.mode]||1;
+
+  host.innerHTML = segSkin()+
+    `<div class="card">`+
+      `<div class="top">`+
+        `<span class="title">Current 5-hour window</span>`+
+        `<span class="resets">resets in ${esc(resetsIn(ws,now))} · ${esc(clock)}</span>`+
+      `</div>`+
+      `<div class="top"><span class="lbl">count</span>${segMode()}</div>`+
+      svgGraph(st, W, H)+
+      `<div class="bars">`+
+        `<span class="sub">used <b>${esc(state.mode)}</b></span>`+
+        `<span class="big">${esc(fmt(st.used))}</span>`+
+        `<span class="meter ${meterCls}"><i style="width:${Math.min(100,st.pct)}%"></i></span>`+
+        `<span class="sub">${st.pct}% of peak ${esc(fmt(st.ceiling))}</span>`+
+      `</div>`+
+      `<div class="bars"><span class="sub">burn ${esc(fmt(st.burn))}/min · proj ${esc(fmt(st.proj))} · `+
+        (st.over?`<span style="color:var(--crit)">▲ on pace to pass peak · ${st.projPct}%</span>`
+                :`▼ under peak · ${st.projPct}%`)+`</span></div>`+
+    `</div>`+
+
+    `<div class="card">`+
+      `<div class="top"><span class="lbl">recent windows</span>`+
+      `<span class="sub">today <b>${esc(fmt(tokVal(d.today)))}</b> · ${state.mode} · ${d.today.msgs} resp</span></div>`+
+      `<div class="spark">`+bl.map(b=>{
+        const h=Math.max(2,Math.round(100*(b[state.mode]||0)/peakBlk));
+        return `<i class="${b.active?"on":""}" style="height:${h}%" title="${esc(fmt(b[state.mode]||0))}"></i>`;
+      }).join("")+`</div>`+
+    `</div>`+
+
+    `<div class="grid2">`+
+      `<div class="card"><span class="lbl">models</span>${rowsHTML(topRows(d.models,4))}</div>`+
+      `<div class="card"><span class="lbl">projects</span>${rowsHTML(topRows(d.projects,4))}</div>`+
+    `</div>`+
+
+    `<div class="foot">peak = busiest window so far · count <b>${esc(state.mode)}</b> = ${esc(MODE_FORMULA[state.mode])}</div>`;
+}
+
+/* ==========================================================================
+   dispatch
+   ========================================================================== */
+function render(){
+  const d=state.data;
+  if(!d){ document.getElementById("term").textContent="loading…"; return; }
+  const now=Date.now()/1000;
+  const clock=new Date().toLocaleTimeString([], {hour12:false});
+  if(state.skin==="clean") renderClean(d, now, clock);
+  else renderTerminal(d, now, clock);
+}
+function applyAppearance(){
+  document.body.dataset.skin=state.skin;
+  document.body.dataset.palette=state.palette;
+}
+async function setAppearance(changes){
+  Object.assign(state, changes);
+  applyAppearance();
+  if(state.skin==="terminal") relayout(); else render();
+  if(state.ready) await saveConfig({skin:state.skin, palette:state.palette});
+}
+
+// show failures in whichever skin is actually visible
+function showError(msg){
+  const id = state.skin==="clean" ? "clean" : "term";
+  const el = document.getElementById(id);
+  if(state.skin==="clean") el.innerHTML=`<div class="card"><div class="empty">${esc(msg)}</div></div>`;
+  else el.textContent=msg;
+}
 async function refresh(){ try{ state.data=await getData(null); render(); }
-  catch(e){ document.getElementById("app").textContent="disconnected"; } }
+  catch(e){ showError("disconnected"); } }
 
-document.getElementById("app").addEventListener("click",(e)=>{
-  const t=e.target.closest("[data-mode]"); if(!t) return;
-  state.mode=t.dataset.mode; render();
+document.body.addEventListener("click",(e)=>{
+  const m=e.target.closest("[data-mode]");
+  if(m){ state.mode=m.dataset.mode; render(); return; }
+  if(!state.ready) return;   // don't persist defaults over stored settings
+  const s=e.target.closest("[data-skin-set]");
+  if(s){ setAppearance({skin:s.dataset.skinSet}); return; }
+  const p=e.target.closest("[data-palette-set]");
+  if(p){ setAppearance({palette:p.dataset.paletteSet}); return; }
 });
-addEventListener("resize",()=>{ clearTimeout(window.__rz); window.__rz=setTimeout(relayout,120); });
+addEventListener("resize",()=>{ clearTimeout(window.__rz);
+  window.__rz=setTimeout(()=>{ if(state.skin==="terminal") relayout(); else render(); },120); });
 
-relayout();
-setInterval(render, 1000);   // live clock + countdown
-refresh(); setInterval(refresh, 5000);
+(async ()=>{
+  const cfg=await loadConfig();
+  state.skin=cfg.skin; state.palette=cfg.palette;
+  state.ready=true;
+  applyAppearance();
+  if(state.skin==="terminal") relayout();
+  await refresh();
+  setInterval(render, 1000);    // live clock + countdown
+  setInterval(refresh, 5000);
+})();
 </script>
 </body>
 </html>

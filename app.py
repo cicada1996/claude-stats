@@ -34,6 +34,14 @@ class Api:
     def get_data(self, days):
         return server.build_payload(days)
 
+    def get_config(self):
+        return server.load_config()
+
+    def set_config(self, skin, palette):
+        """Persist appearance settings. Invalid values are ignored, and the
+        config as actually stored is returned so the page can resync."""
+        return server.save_config(skin=skin, palette=palette)
+
 
 def main():
     with open("taskman.html", "r", encoding="utf-8") as fh:

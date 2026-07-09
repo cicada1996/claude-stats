@@ -205,7 +205,51 @@ def compute_blocks(entries):
 
 
 HISTORY_PATH = os.path.expanduser("~/.claude-stats/history.json")
+CONFIG_PATH = os.path.expanduser("~/.claude-stats/config.json")
 _last_snapshot = 0.0
+
+# Appearance settings, and the only values each accepts. The app stores these on
+# disk rather than in the page because pywebview runs with private_mode=True by
+# default, which clears localStorage on every launch.
+SKINS = ("terminal", "clean")
+PALETTES = ("phosphor", "amber", "slate")
+DEFAULT_CONFIG = {"skin": "terminal", "palette": "phosphor"}
+
+
+def load_config():
+    """Read ~/.claude-stats/config.json, falling back to defaults for anything
+    missing, unreadable, or not a value we recognise."""
+    cfg = dict(DEFAULT_CONFIG)
+    try:
+        with open(CONFIG_PATH) as fh:
+            stored = json.load(fh)
+        if isinstance(stored, dict):
+            if stored.get("skin") in SKINS:
+                cfg["skin"] = stored["skin"]
+            if stored.get("palette") in PALETTES:
+                cfg["palette"] = stored["palette"]
+    except (OSError, ValueError):
+        pass  # missing or corrupt config is not an error; use defaults
+    return cfg
+
+
+def save_config(**changes):
+    """Merge validated changes into the stored config and return the new config.
+    Unknown keys and invalid values are ignored rather than persisted."""
+    cfg = load_config()
+    if changes.get("skin") in SKINS:
+        cfg["skin"] = changes["skin"]
+    if changes.get("palette") in PALETTES:
+        cfg["palette"] = changes["palette"]
+    try:
+        os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
+        tmp = CONFIG_PATH + ".tmp"
+        with open(tmp, "w") as fh:
+            json.dump(cfg, fh, separators=(",", ":"), sort_keys=True)
+        os.replace(tmp, CONFIG_PATH)
+    except OSError:
+        pass  # settings are best-effort; never break the dashboard
+    return cfg
 
 
 def snapshot_history(entries):
