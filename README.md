@@ -4,7 +4,12 @@ A live **terminal dashboard** for how many tokens you burn with Claude Code, wit
 history. Runs entirely in your terminal — no browser, no window to keep open.
 
 Reads Claude Code's own transcript files (`~/.claude/projects/**/*.jsonl`) — nothing
-leaves your machine, no API key, no dependencies (Python 3.9+ stdlib only).
+leaves your machine, no API key.
+
+The terminal dashboard and the browser version need **Python 3.9+ and nothing else**
+(stdlib only). The native desktop app additionally needs
+[`pywebview`](https://pywebview.flowrl.com/) for its window; `app.py` installs it
+with `pip install --user pywebview` the first time it can't import it.
 
 ## Run
 
@@ -46,11 +51,16 @@ reset. Below that: recent windows, today's totals, and a per-model breakdown.
 
 - Double-click **`Claude Stats.app`** in your **Applications** folder.
 - To (re)build it from this folder's code, double-click **`install-app.command`**
-  (or run `./install-app.command`). It's a self-contained bundle — it carries its
-  own copy of the code, so it works from Finder without needing access to your
-  Documents folder.
+  (or run `./install-app.command`). The bundle carries its own copy of `app.py`,
+  `server.py` and `taskman.html`, so it works from Finder without needing access to
+  your Documents folder. It installs to `/Applications` when that's writable and
+  falls back to `~/Applications` otherwise — the script prints which one it used.
 - For development, `python3 app.py` or `run-app.command` runs the same window
   straight from this folder and prints any errors.
+
+The bundle runs against the system `/usr/bin/python3` and its user site-packages —
+it does not vendor `pywebview`. If the app bounces without opening a window, check
+**`/tmp/claude-stats.log`**, where the bundle sends all its output.
 
 > **Why is the app in /Applications and not here?** macOS blocks apps launched from
 > Finder from reading `~/Documents` (a privacy-protected folder). The editable code
